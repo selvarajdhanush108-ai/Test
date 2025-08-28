@@ -60,22 +60,18 @@
             );
 
             const satelliteLayer = L.tileLayer(
-                "https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png", // Example satellite-like layer
+                "https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png",
                 { attribution: "&copy; OpenTopoMap contributors" },
             );
 
             const map = L.map("map", {
                 center: [20.5937, 78.9629],
                 zoom: 5,
-                layers: [streetLayer], // default layer
+                layers: [streetLayer],
             });
 
-            // Layer control to toggle between street and satellite
             L.control
-                .layers({
-                    Street: streetLayer,
-                    Satellite: satelliteLayer,
-                })
+                .layers({ Street: streetLayer, Satellite: satelliteLayer })
                 .addTo(map);
 
             const busIcon = L.icon({
@@ -111,11 +107,11 @@
                         data.lng ??
                         data[0]?.longitude ??
                         data[0]?.lng;
-                    const timestamp =
+                    let timestamp =
                         data.timestamp ??
                         data.time ??
                         data[0]?.timestamp ??
-                        new Date().toLocaleString();
+                        new Date().toISOString();
 
                     if (lat == null || lng == null) {
                         statusEl.textContent =
@@ -123,6 +119,32 @@
                         console.log("API Response:", data);
                         return;
                     }
+
+                    // Convert timestamp to Indian Standard Time (IST)
+                    const dateObj = new Date(timestamp);
+                    const istOffset = 5.5 * 60; // IST is UTC+5:30 in minutes
+                    const istDate = new Date(
+                        dateObj.getTime() + istOffset * 60000,
+                    );
+
+                    // Format date
+                    const day = istDate.getDate().toString().padStart(2, "0");
+                    const month = (istDate.getMonth() + 1)
+                        .toString()
+                        .padStart(2, "0");
+                    const year = istDate.getFullYear();
+
+                    // Format time in 12-hour
+                    const hours = istDate.getHours();
+                    const minutes = istDate
+                        .getMinutes()
+                        .toString()
+                        .padStart(2, "0");
+                    const ampm = hours >= 12 ? "PM" : "AM";
+                    const hours12 = hours % 12 === 0 ? 12 : hours % 12;
+
+                    const formattedDateTime = `${day}-${month}-${year} ${hours12}:${minutes} ${ampm}`;
+                    timestamp = formattedDateTime;
 
                     if (!busMarker) {
                         busMarker = L.marker([lat, lng], {
@@ -137,6 +159,7 @@
                             `Bus ${busId}<br>Lat: ${lat.toFixed(5)}, Lng: ${lng.toFixed(5)}<br>Time: ${timestamp}`,
                         )
                         .openPopup();
+
                     map.setView([lat, lng], 15);
                     statusEl.textContent = `Bus ${busId} at ${lat.toFixed(5)}, ${lng.toFixed(5)} (Time: ${timestamp})`;
                 } catch (err) {
