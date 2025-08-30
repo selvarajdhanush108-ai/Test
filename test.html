@@ -1,273 +1,348 @@
 <!doctype html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Bus Tracker Live</title>
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Bus Tracker Live</title>
 
-  <!-- TailwindCSS -->
-  <script src="https://cdn.tailwindcss.com"></script>
+        <!-- TailwindCSS -->
+        <script src="https://cdn.tailwindcss.com"></script>
 
-  <!-- Leaflet CSS & JS -->
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+        <!-- Leaflet -->
+        <link
+            rel="stylesheet"
+            href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+        />
+        <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
-  <!-- Socket.IO -->
-  <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+        <!-- Socket.IO -->
+        <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
 
-  <style>
-    #map { height: 80vh; }
-    .bus-popup { min-width: 200px; }
+        <!-- Google Fonts -->
+        <link
+            href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap"
+            rel="stylesheet"
+        />
 
-    /* Floating button */
-    #setHomeBtn {
-      position: fixed; bottom: 20px; right: 20px;
-      background: #22c55e; color: #fff; border: none;
-      border-radius: 50%; width: 60px; height: 60px;
-      font-size: 28px; font-weight: 700; cursor: pointer;
-      box-shadow: 0 6px 16px rgba(0, 0, 0, 0.3); z-index: 9999;
-    }
+        <style>
+            body {
+                font-family: "Poppins", sans-serif;
+                background: #f1f5f9;
+                margin: 0;
+                padding: 0;
+                height: 100vh;
+                display: flex;
+                flex-direction: column;
+            }
+            #map {
+                flex: 1;
+            }
 
-    /* Toast */
-    #toast {
-      position: fixed; top: 14px; left: 50%; transform: translateX(-50%);
-      background: #111827; color: #fff; padding: 10px 16px;
-      border-radius: 999px; font-weight: 700; display: none;
-      z-index: 10000; border: 1px solid rgba(255,255,255,0.15);
-    }
+            /* Glass effect for controls */
+            .glass-panel {
+                position: fixed;
+                top: 20px;
+                left: 50%;
+                transform: translateX(-50%);
+                width: 90%;
+                max-width: 600px;
+                background: rgba(255, 255, 255, 0.2);
+                backdrop-filter: blur(12px);
+                -webkit-backdrop-filter: blur(12px);
+                border-radius: 20px;
+                padding: 16px;
+                box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+                border: 1px solid rgba(255, 255, 255, 0.3);
+                z-index: 9999;
+                display: flex;
+                flex-direction: column;
+                gap: 10px;
+            }
 
-    /* Modal */
-    #alertModal {
-      position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-      background: rgba(0,0,0,0.6); display: none; justify-content: center;
-      align-items: center; z-index: 20000;
-    }
-    #alertBox {
-      background: white; color: black; padding: 20px; border-radius: 16px;
-      width: 90%; max-width: 400px; text-align: center; box-shadow: 0 6px 20px rgba(0,0,0,0.3);
-    }
-    #alertBox button {
-      background: #ef4444; color: white; padding: 10px 20px; border: none;
-      border-radius: 8px; font-size: 18px; cursor: pointer; margin-top: 10px;
-    }
-    #alertIcon {
-      font-size: 50px; margin-bottom: 10px; color: #ef4444;
-    }
-  </style>
-</head>
-<body class="bg-gray-100 flex flex-col min-h-screen">
-  <!-- Header -->
-  <header class="bg-indigo-600 text-white py-4 shadow-md">
-    <h1 class="text-center text-2xl sm:text-3xl font-bold">🚌 Bus Tracker Live</h1>
-  </header>
+            /* Floating buttons */
+            .floating-btn {
+                position: fixed;
+                bottom: 20px;
+                right: 20px;
+                display: flex;
+                flex-direction: column;
+                gap: 12px;
+                z-index: 9999;
+            }
+            .btn-circle {
+                width: 58px;
+                height: 58px;
+                border-radius: 50%;
+                border: none;
+                font-size: 26px;
+                cursor: pointer;
+                color: #fff;
+                box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3);
+                transition:
+                    transform 0.2s ease,
+                    box-shadow 0.2s ease;
+            }
+            .btn-circle:hover {
+                transform: scale(1.08);
+                box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
+            }
 
-  <!-- Controls -->
-  <div class="flex flex-col sm:flex-row items-center justify-center gap-3 p-4 bg-white shadow-md">
-    <input type="text" id="busId" placeholder="Enter Bus ID"
-      class="border rounded-lg px-4 py-2 w-full sm:w-1/3 focus:ring-2 focus:ring-indigo-500 outline-none" />
-    <button id="findBtn"
-      class="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2 rounded-lg shadow-md transition-all">
-      Start Tracking
-    </button>
-    <span id="status" class="text-gray-700 text-sm sm:text-base ml-2"></span>
-  </div>
+            /* Toast notification */
+            #toast {
+                position: fixed;
+                top: -100px;
+                left: 50%;
+                transform: translateX(-50%);
+                background: #111827;
+                color: #fff;
+                padding: 12px 20px;
+                border-radius: 999px;
+                font-weight: 600;
+                z-index: 10000;
+                opacity: 0;
+                transition: all 0.4s ease;
+            }
+            #toast.show {
+                top: 20px;
+                opacity: 1;
+            }
+        </style>
+    </head>
+    <body>
+        <!-- Glass Panel Controls -->
+        <div class="glass-panel">
+            <div class="flex flex-col sm:flex-row items-center gap-3 w-full">
+                <input
+                    type="text"
+                    id="busId"
+                    placeholder="Enter Bus ID"
+                    class="border border-gray-300 rounded-lg px-4 py-2 w-full sm:w-72 focus:ring-2 focus:ring-indigo-500 outline-none"
+                />
+                <button
+                    id="findBtn"
+                    class="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2 rounded-lg shadow-md transition-all"
+                >
+                    Start Tracking
+                </button>
+            </div>
+            <span id="status" class="text-gray-700 text-sm sm:text-base"></span>
+        </div>
 
-  <!-- Map -->
-  <div id="map" class="w-full flex-1 shadow-inner"></div>
+        <!-- Map -->
+        <div id="map"></div>
 
-  <!-- Floating Button + Toast -->
-  <button id="setHomeBtn" title="Set / Update Home">🏠</button>
-  <div id="toast">Bus is near your home! 🚍</div>
+        <!-- Floating Buttons -->
+        <div class="floating-btn">
+            <button
+                id="mapsBtn"
+                title="Open in Google Maps"
+                class="btn-circle"
+                style="background: #f97316"
+            >
+                📍
+            </button>
+            <button
+                id="terrainBtn"
+                title="Toggle Map View"
+                class="btn-circle"
+                style="background: #2563eb"
+            >
+                🗺️
+            </button>
+            <button
+                id="setHomeBtn"
+                title="Set Home"
+                class="btn-circle"
+                style="background: #22c55e"
+            >
+                🏠
+            </button>
+        </div>
+        <div id="toast">Bus is near your home! 🚍</div>
 
-  <!-- Alert Modal -->
-  <div id="alertModal">
-    <div id="alertBox">
-      <div id="alertIcon">🚨</div>
-      <h2 class="text-xl font-bold mb-2">Bus is Near!</h2>
-      <p>The bus has entered your 2 km home zone.</p>
-      <button id="stopAlertBtn">🔕 Stop Alert</button>
-    </div>
-  </div>
+        <script>
+            // ---------------- Map Setup ----------------
+            const map = L.map("map").setView([20.5937, 78.9629], 5);
 
-  <script>
-    // ---------------- Map Setup ----------------
-    const map = L.map("map").setView([20.5937, 78.9629], 5);
-    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19 }).addTo(map);
+            const normalLayer = L.tileLayer(
+                "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+                {
+                    maxZoom: 19,
+                    attribution: "&copy; OpenStreetMap contributors",
+                },
+            ).addTo(map);
 
-    const socket = io("https://bus-tracker-server-ajmu.onrender.com");
+            const esriImagery = L.tileLayer(
+                "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+                { maxZoom: 20, attribution: "Tiles &copy; Esri" },
+            );
+            const esriLabels = L.tileLayer(
+                "https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}",
+                { maxZoom: 20, attribution: "Labels &copy; Esri" },
+            );
+            const hybridLayer = L.layerGroup([esriImagery, esriLabels]);
+            const terrainLayer = L.tileLayer(
+                "https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}",
+                { maxZoom: 20, attribution: "Tiles &copy; Esri" },
+            );
 
-    const busIcon = L.icon({
-      iconUrl: "https://img.icons8.com/color/48/000000/bus.png",
-      iconSize: [40, 40], iconAnchor: [20, 20], popupAnchor: [0, -25],
-    });
+            document
+                .getElementById("terrainBtn")
+                .addEventListener("click", () => {
+                    if (map.hasLayer(normalLayer)) {
+                        map.removeLayer(normalLayer);
+                        map.addLayer(hybridLayer);
+                    } else if (map.hasLayer(hybridLayer)) {
+                        map.removeLayer(hybridLayer);
+                        map.addLayer(terrainLayer);
+                    } else {
+                        map.removeLayer(terrainLayer);
+                        map.addLayer(normalLayer);
+                    }
+                });
 
-    let busMarker = null;
-    let trackingBusId = null;
-    const statusEl = document.getElementById("status");
-    const findBtn = document.getElementById("findBtn");
+            const socket = io("https://bus-tracker-server-ajmu.onrender.com");
+            const busIcon = L.icon({
+                iconUrl: "https://img.icons8.com/color/48/000000/bus.png",
+                iconSize: [40, 40],
+                iconAnchor: [20, 20],
+                popupAnchor: [0, -25],
+            });
 
-    function startTracking() {
-      trackingBusId = document.getElementById("busId").value.trim();
-      if (!trackingBusId) { statusEl.textContent = "Enter a Bus ID"; return; }
-      statusEl.textContent = `Tracking bus ${trackingBusId}...`;
-      findBtn.textContent = "Stop Tracking"; findBtn.classList.add("stop");
-    }
-    function stopTracking() {
-      trackingBusId = null; statusEl.textContent = "Tracking stopped";
-      findBtn.textContent = "Start Tracking"; findBtn.classList.remove("stop");
-      if (busMarker) { map.removeLayer(busMarker); busMarker = null; }
-    }
-    findBtn.addEventListener("click", () => { if (!trackingBusId) startTracking(); else stopTracking(); });
+            let busMarker = null,
+                trackingBusId = null,
+                latestBusLat = null,
+                latestBusLng = null;
+            const statusEl = document.getElementById("status"),
+                findBtn = document.getElementById("findBtn");
 
-    // ---------------- Toast ----------------
-    const toast = document.getElementById("toast");
-    function showToast(msg, ms = 1800) {
-      toast.textContent = msg; toast.style.display = "block";
-      setTimeout(() => toast.style.display = "none", ms);
-    }
+            function startTracking() {
+                trackingBusId = document.getElementById("busId").value.trim();
+                if (!trackingBusId)
+                    return (statusEl.textContent = "Enter a Bus ID");
+                statusEl.textContent = `Tracking bus ${trackingBusId}...`;
+                findBtn.textContent = "Stop Tracking";
+            }
+            function stopTracking() {
+                trackingBusId = null;
+                statusEl.textContent = "Tracking stopped";
+                findBtn.textContent = "Start Tracking";
+                if (busMarker) {
+                    map.removeLayer(busMarker);
+                    busMarker = null;
+                }
+            }
+            findBtn.addEventListener("click", () => {
+                !trackingBusId ? startTracking() : stopTracking();
+            });
 
-    // ---------------- Continuous Alert with 1-hour Snooze ----------------
-    const alertModal = document.getElementById("alertModal");
-    const stopAlertBtn = document.getElementById("stopAlertBtn");
-    let alertActive = false;
-    let snoozeUntil = 0;
-    let buzzerNode = null;
-    let vibrationInterval = null;
-    let audioCtx = null;
+            const toast = document.getElementById("toast");
+            function showToast(msg, ms = 2000) {
+                toast.textContent = msg;
+                toast.classList.add("show");
+                setTimeout(() => toast.classList.remove("show"), ms);
+            }
 
-    function ensureAudio() {
-      if (!audioCtx) {
-        try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } 
-        catch(e) { console.warn("Audio not available", e); }
-      }
-    }
+            // ---------------- Home Location ----------------
+            const DISTANCE_THRESHOLD = 2000;
+            let home = null,
+                homeMarker = null,
+                homeCircle = null;
+            (function loadHome() {
+                const saved = localStorage.getItem("homeLocation");
+                if (saved) {
+                    try {
+                        home = JSON.parse(saved);
+                    } catch {}
+                }
+                if (home && typeof home.lat === "number") drawHome();
+            })();
 
-    function startContinuousAlert() {
-      if (alertActive || Date.now() < snoozeUntil) return;
-      alertActive = true;
-      alertModal.style.display = "flex";
-      ensureAudio();
+            function drawHome() {
+                if (!home) return;
+                if (homeMarker) map.removeLayer(homeMarker);
+                homeMarker = L.marker([home.lat, home.lng], {
+                    icon: L.icon({
+                        iconUrl:
+                            "https://img.icons8.com/ios-filled/50/228BE6/home.png",
+                        iconSize: [35, 35],
+                        iconAnchor: [17, 34],
+                    }),
+                })
+                    .addTo(map)
+                    .bindPopup("🏠 Home");
+                if (homeCircle) map.removeLayer(homeCircle);
+                homeCircle = L.circle([home.lat, home.lng], {
+                    radius: DISTANCE_THRESHOLD,
+                    color: "#2563eb",
+                    weight: 2,
+                    fillOpacity: 0.06,
+                }).addTo(map);
+            }
 
-      // Continuous buzzer
-      buzzerNode = audioCtx.createOscillator();
-      const gain = audioCtx.createGain();
-      buzzerNode.type = "square"; buzzerNode.frequency.value = 900;
-      gain.gain.value = 0.25;
-      buzzerNode.connect(gain).connect(audioCtx.destination);
-      buzzerNode.start();
+            document
+                .getElementById("setHomeBtn")
+                .addEventListener("click", () => {
+                    if (!navigator.geolocation) return alert("No geolocation");
+                    navigator.geolocation.getCurrentPosition(
+                        (pos) => {
+                            home = {
+                                lat: pos.coords.latitude,
+                                lng: pos.coords.longitude,
+                                savedAt: Date.now(),
+                            };
+                            localStorage.setItem(
+                                "homeLocation",
+                                JSON.stringify(home),
+                            );
+                            drawHome();
+                            map.setView([home.lat, home.lng], 15);
+                            showToast("Home saved!");
+                        },
+                        (err) => alert("Failed:" + err.message),
+                        { enableHighAccuracy: true },
+                    );
+                });
 
-      // Continuous vibration
-      if (navigator.vibrate) {
-        vibrationInterval = setInterval(() => {
-          navigator.vibrate([300, 200, 300, 200, 600]);
-        }, 2000);
-      }
-    }
-
-    function stopContinuousAlert() {
-      alertActive = false;
-      snoozeUntil = Date.now() + 60 * 60 * 1000; // snooze 1 hour
-      alertModal.style.display = "none";
-
-      if (buzzerNode) { buzzerNode.stop(); buzzerNode.disconnect(); buzzerNode = null; }
-      if (vibrationInterval) { clearInterval(vibrationInterval); vibrationInterval = null; }
-
-      showToast("Alerts snoozed for 1 hour");
-    }
-    stopAlertBtn.addEventListener("click", stopContinuousAlert);
-
-    // ---------------- Home Location ----------------
-    const DISTANCE_THRESHOLD = 2000; // meters
-    let home = null, homeMarker = null, homeCircle = null;
-
-    (function loadHome() {
-      const saved = localStorage.getItem("homeLocation");
-      if (saved) try { home = JSON.parse(saved); } catch {}
-      if (home && typeof home.lat === "number" && typeof home.lng === "number") drawHome();
-    })();
-
-    function drawHome() {
-      if (!home) return;
-      if (homeMarker) map.removeLayer(homeMarker);
-      homeMarker = L.marker([home.lat, home.lng], {
-        icon: L.icon({
-          iconUrl: "https://img.icons8.com/ios-filled/50/228BE6/home.png",
-          iconSize: [35, 35], iconAnchor: [17, 34],
-        }),
-      }).addTo(map).bindPopup(`🏠 Home<br/>Acc: ${home.accuracy ?? "—"} m`);
-      if (homeCircle) map.removeLayer(homeCircle);
-      homeCircle = L.circle([home.lat, home.lng], {
-        radius: DISTANCE_THRESHOLD, color: "#2563eb", weight: 2, fillOpacity: 0.06,
-      }).addTo(map);
-    }
-
-    let setHomeWatchId = null;
-    document.getElementById("setHomeBtn").addEventListener("click", () => {
-      if (!("geolocation" in navigator)) { alert("Geolocation not supported."); return; }
-      ensureAudio();
-      audioCtx?.resume?.().catch(()=>{});
-      showToast("Getting accurate location…");
-
-      const TARGET_ACC = 30, TIMEOUT_MS = 15000;
-      let best = null, start = Date.now();
-
-      setHomeWatchId = navigator.geolocation.watchPosition(
-        (pos) => {
-          const { latitude, longitude, accuracy } = pos.coords;
-          if (!best || accuracy < best.accuracy) {
-            best = { lat: latitude, lng: longitude, accuracy };
-            showToast(`Accuracy: ${Math.round(accuracy)} m`);
-          }
-          if ((best && best.accuracy <= TARGET_ACC) || Date.now() - start > TIMEOUT_MS)
-            finalizeHome(best);
-        },
-        (err) => { console.warn("Geo error", err); alert("Failed: " + err.message); clearWatch(); },
-        { enableHighAccuracy: true, maximumAge: 0, timeout: 20000 }
-      );
-    });
-
-    function clearWatch() { if (setHomeWatchId!=null){navigator.geolocation.clearWatch(setHomeWatchId); setHomeWatchId=null;} }
-    function finalizeHome(best) {
-      clearWatch();
-      if (!best) { alert("No fix."); return; }
-      home = { lat: best.lat, lng: best.lng, accuracy: Math.round(best.accuracy||0), savedAt: Date.now() };
-      localStorage.setItem("homeLocation", JSON.stringify(home));
-      drawHome(); map.setView([home.lat, home.lng], 15);
-      showToast(`Home saved (±${home.accuracy} m)`);
-    }
-
-    // ---------------- Proximity Alert ----------------
-    let lastAlertTime = 0;
-    function checkBusProximity(lat, lng) {
-      if (!home || Date.now() < snoozeUntil) return;
-      const d = L.latLng(home.lat, home.lng).distanceTo([lat, lng]);
-      if (isNaN(d)) return;
-      const now = Date.now();
-      if (d <= DISTANCE_THRESHOLD && !alertActive && now - lastAlertTime > 5000) {
-        lastAlertTime = now; startContinuousAlert();
-      }
-    }
-
-    // ---------------- Bus Updates ----------------
-    socket.on("busLocationUpdate", (data) => {
-      if (!trackingBusId || data.busId !== trackingBusId) return;
-      const lat = data.latitude, lng = data.longitude, t = data.timestamp;
-      if (typeof lat!=="number"||typeof lng!=="number") return;
-      checkBusProximity(lat,lng);
-
-      const popup = `
-        <div class="bus-popup p-2">
+            // ---------------- Bus Updates ----------------
+            socket.on("busLocationUpdate", (data) => {
+                if (!trackingBusId || data.busId !== trackingBusId) return;
+                const lat = data.latitude,
+                    lng = data.longitude;
+                if (typeof lat !== "number" || typeof lng !== "number") return;
+                latestBusLat = lat;
+                latestBusLng = lng;
+                const popupContent = `
+        <div class="p-2">
           <div class="font-semibold text-indigo-700 text-lg">Bus: ${data.busId}</div>
-          <div class="text-gray-700">Lat: ${lat.toFixed(5)}</div>
-          <div class="text-gray-700">Lng: ${lng.toFixed(5)}</div>
-          <div class="text-gray-600">Time: ${t ?? "—"}</div>
+          <div>Lat: ${lat.toFixed(5)}</div>
+          <div>Lng: ${lng.toFixed(5)}</div>
+          <div>🕒 ${data.timestamp || "—"}</div>
         </div>`;
-      if (!busMarker) {
-        busMarker = L.marker([lat,lng],{icon:busIcon}).addTo(map).bindPopup(popup).openPopup();
-        map.setView([lat,lng],15);
-      } else { busMarker.setLatLng([lat,lng]); busMarker.getPopup()?.setContent(popup); }
-      statusEl.textContent = `Bus ${data.busId} @ ${lat.toFixed(5)}, ${lng.toFixed(5)}`;
-    });
-  </script>
-</body>
+                if (!busMarker) {
+                    busMarker = L.marker([lat, lng], { icon: busIcon })
+                        .addTo(map)
+                        .bindPopup(popupContent)
+                        .openPopup();
+                    map.setView([lat, lng], 15);
+                } else {
+                    busMarker.setLatLng([lat, lng]);
+                    busMarker.getPopup()?.setContent(popupContent);
+                }
+                statusEl.textContent = `Bus ${data.busId} at ${lat.toFixed(5)}, ${lng.toFixed(5)} (Time: ${data.timestamp || "—"})`;
+            });
+
+            // ---------------- Google Maps Button ----------------
+            document.getElementById("mapsBtn").addEventListener("click", () => {
+                if (!latestBusLat || !latestBusLng) {
+                    alert("No bus location available yet!");
+                    return;
+                }
+                window.open(
+                    `https://www.google.com/maps?q=${latestBusLat},${latestBusLng}`,
+                    "_blank",
+                );
+            });
+        </script>
+    </body>
 </html>
