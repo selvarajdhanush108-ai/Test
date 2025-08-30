@@ -1,0 +1,273 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Bus Tracker Live</title>
+
+        <!-- TailwindCSS -->
+        <script src="https://cdn.tailwindcss.com"></script>
+
+        <!-- Leaflet CSS & JS -->
+        <link
+            rel="stylesheet"
+            href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+        />
+        <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+        <!-- Socket.IO -->
+        <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+
+        <style>
+            #map {
+                height: 80vh;
+            }
+            .bus-popup {
+                min-width: 200px;
+            }
+
+            /* Floating button */
+            #setHomeBtn {
+                position: fixed;
+                bottom: 20px;
+                right: 20px;
+                background: #22c55e;
+                color: white;
+                border: none;
+                border-radius: 50%;
+                width: 60px;
+                height: 60px;
+                font-size: 28px;
+                font-weight: bold;
+                box-shadow: 0 6px 16px rgba(0, 0, 0, 0.3);
+                cursor: pointer;
+                z-index: 9999;
+            }
+
+            /* Toast notification */
+            #toast {
+                position: fixed;
+                top: 15px;
+                left: 50%;
+                transform: translateX(-50%);
+                background: #ef4444;
+                color: white;
+                padding: 10px 20px;
+                border-radius: 999px;
+                font-weight: bold;
+                display: none;
+                z-index: 9999;
+            }
+        </style>
+    </head>
+    <body class="bg-gray-100 flex flex-col min-h-screen">
+        <!-- Header -->
+        <header class="bg-indigo-600 text-white py-4 shadow-md">
+            <h1 class="text-center text-2xl sm:text-3xl font-bold">
+                🚌 Bus Tracker Live
+            </h1>
+        </header>
+
+        <!-- Controls -->
+        <div
+            class="flex flex-col sm:flex-row items-center justify-center gap-3 p-4 bg-white shadow-md"
+        >
+            <input
+                type="text"
+                id="busId"
+                placeholder="Enter Bus ID"
+                class="border rounded-lg px-4 py-2 w-full sm:w-1/3 focus:ring-2 focus:ring-indigo-500 outline-none"
+            />
+            <button
+                id="findBtn"
+                class="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2 rounded-lg shadow-md transition-all"
+            >
+                Start Tracking
+            </button>
+            <span
+                id="status"
+                class="text-gray-700 text-sm sm:text-base ml-2"
+            ></span>
+        </div>
+
+        <!-- Map -->
+        <div id="map" class="w-full flex-1 shadow-inner"></div>
+
+        <!-- Floating Button + Toast -->
+        <button id="setHomeBtn" title="Set Home">🏠</button>
+        <div id="toast">Bus is near your home! 🚍</div>
+
+        <script>
+            // ---- Map Setup ----
+            const map = L.map("map").setView([20.5937, 78.9629], 5);
+            L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+                maxZoom: 19,
+            }).addTo(map);
+
+            const socket = io("https://bus-tracker-server-ajmu.onrender.com");
+
+            const busIcon = L.icon({
+                iconUrl: "https://img.icons8.com/color/48/000000/bus.png",
+                iconSize: [40, 40],
+                iconAnchor: [20, 20],
+                popupAnchor: [0, -25],
+            });
+
+            let busMarker = null;
+            let trackingBusId = null;
+            const statusEl = document.getElementById("status");
+            const findBtn = document.getElementById("findBtn");
+
+            function startTracking() {
+                trackingBusId = document.getElementById("busId").value.trim();
+                if (!trackingBusId) {
+                    statusEl.textContent = "Enter a Bus ID";
+                    return;
+                }
+                statusEl.textContent = `Tracking bus ${trackingBusId}...`;
+                findBtn.textContent = "Stop Tracking";
+                findBtn.classList.add("stop");
+            }
+
+            function stopTracking() {
+                trackingBusId = null;
+                statusEl.textContent = "Tracking stopped";
+                findBtn.textContent = "Start Tracking";
+                findBtn.classList.remove("stop");
+                if (busMarker) {
+                    map.removeLayer(busMarker);
+                    busMarker = null;
+                }
+            }
+
+            findBtn.addEventListener("click", () => {
+                if (!trackingBusId) startTracking();
+                else stopTracking();
+            });
+
+            // ---- Home Location Storage ----
+            let homeLocation = null;
+            let homeMarker = null;
+            const saved = localStorage.getItem("homeLocation");
+            if (saved) {
+                homeLocation = JSON.parse(saved);
+                addHomeMarker();
+            }
+
+            function addHomeMarker() {
+                if (!homeLocation) return;
+                if (homeMarker) map.removeLayer(homeMarker);
+                homeMarker = L.marker([homeLocation.lat, homeLocation.lng], {
+                    icon: L.icon({
+                        iconUrl:
+                            "https://img.icons8.com/ios-filled/50/228BE6/home.png",
+                        iconSize: [35, 35],
+                        iconAnchor: [17, 34],
+                    }),
+                })
+                    .addTo(map)
+                    .bindPopup("🏠 Home Location");
+            }
+
+            document
+                .getElementById("setHomeBtn")
+                .addEventListener("click", () => {
+                    if (!navigator.geolocation) {
+                        alert("Geolocation not supported.");
+                        return;
+                    }
+                    navigator.geolocation.getCurrentPosition(
+                        (pos) => {
+                            const { latitude, longitude } = pos.coords;
+                            homeLocation = { lat: latitude, lng: longitude };
+                            localStorage.setItem(
+                                "homeLocation",
+                                JSON.stringify(homeLocation),
+                            );
+                            addHomeMarker();
+                            alert("Home location saved!");
+                        },
+                        (err) =>
+                            alert("Failed to get location: " + err.message),
+                        { enableHighAccuracy: true, timeout: 10000 },
+                    );
+                });
+
+            // ---- Alert Functions ----
+            const toast = document.getElementById("toast");
+            let audioCtx = null;
+            const DISTANCE_THRESHOLD = 2000; // 2km
+
+            function showToast(msg) {
+                toast.textContent = msg;
+                toast.style.display = "block";
+                setTimeout(() => (toast.style.display = "none"), 4000);
+            }
+
+            function buzzer(freq = 1200, duration = 3000) {
+                try {
+                    if (!audioCtx)
+                        audioCtx = new (window.AudioContext ||
+                            window.webkitAudioContext)();
+                    const o = audioCtx.createOscillator();
+                    const g = audioCtx.createGain();
+                    o.type = "sine";
+                    o.frequency.value = freq;
+                    g.gain.value = 0.3;
+                    o.connect(g).connect(audioCtx.destination);
+                    o.start();
+                    setTimeout(() => o.stop(), duration);
+                } catch (e) {
+                    console.warn("Audio not available", e);
+                }
+            }
+
+            function checkBusProximity(lat, lng) {
+                if (!homeLocation) return;
+                const userLatLng = L.latLng(homeLocation.lat, homeLocation.lng);
+                const busLatLng = L.latLng(lat, lng);
+                const distance = userLatLng.distanceTo(busLatLng); // meters
+                if (distance <= DISTANCE_THRESHOLD) {
+                    showToast(`Bus is ${Math.round(distance)}m from home! 🚍`);
+                    buzzer();
+                    if (navigator.vibrate)
+                        navigator.vibrate([300, 200, 300, 200, 600]);
+                }
+            }
+
+            // ---- Bus Location Updates ----
+            socket.on("busLocationUpdate", (data) => {
+                if (!trackingBusId || data.busId !== trackingBusId) return;
+
+                const lat = data.latitude;
+                const lng = data.longitude;
+                const timestamp = data.timestamp;
+                if (!lat || !lng || !timestamp) return;
+
+                checkBusProximity(lat, lng); // Check alert range
+
+                const popupContent = `
+        <div class="bus-popup p-2">
+          <div class="font-semibold text-indigo-700 text-lg">Bus: ${data.busId}</div>
+          <div class="text-gray-700">Lat: ${lat.toFixed(5)}</div>
+          <div class="text-gray-700">Lng: ${lng.toFixed(5)}</div>
+          <div class="text-gray-600">Time (IST): ${timestamp}</div>
+        </div>
+      `;
+
+                if (!busMarker) {
+                    busMarker = L.marker([lat, lng], { icon: busIcon })
+                        .addTo(map)
+                        .bindPopup(popupContent)
+                        .openPopup();
+                    map.setView([lat, lng], 15);
+                } else {
+                    busMarker.setLatLng([lat, lng]);
+                    busMarker.getPopup().setContent(popupContent);
+                }
+
+                statusEl.textContent = `Bus ${data.busId} at ${lat.toFixed(5)}, ${lng.toFixed(5)} (Time: ${timestamp})`;
+            });
+        </script>
+    </body>
+</html>
