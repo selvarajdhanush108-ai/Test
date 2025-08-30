@@ -126,10 +126,11 @@
       setTimeout(() => toast.style.display = "none", ms);
     }
 
-    // ---------------- Continuous Alert ----------------
+    // ---------------- Continuous Alert with 1-hour Snooze ----------------
     const alertModal = document.getElementById("alertModal");
     const stopAlertBtn = document.getElementById("stopAlertBtn");
     let alertActive = false;
+    let snoozeUntil = 0;
     let buzzerNode = null;
     let vibrationInterval = null;
     let audioCtx = null;
@@ -142,7 +143,7 @@
     }
 
     function startContinuousAlert() {
-      if (alertActive) return;
+      if (alertActive || Date.now() < snoozeUntil) return;
       alertActive = true;
       alertModal.style.display = "flex";
       ensureAudio();
@@ -165,9 +166,13 @@
 
     function stopContinuousAlert() {
       alertActive = false;
+      snoozeUntil = Date.now() + 60 * 60 * 1000; // snooze 1 hour
       alertModal.style.display = "none";
+
       if (buzzerNode) { buzzerNode.stop(); buzzerNode.disconnect(); buzzerNode = null; }
       if (vibrationInterval) { clearInterval(vibrationInterval); vibrationInterval = null; }
+
+      showToast("Alerts snoozed for 1 hour");
     }
     stopAlertBtn.addEventListener("click", stopContinuousAlert);
 
@@ -213,7 +218,8 @@
             best = { lat: latitude, lng: longitude, accuracy };
             showToast(`Accuracy: ${Math.round(accuracy)} m`);
           }
-          if (best && best.accuracy <= TARGET_ACC || Date.now()-start>TIMEOUT_MS) finalizeHome(best);
+          if ((best && best.accuracy <= TARGET_ACC) || Date.now() - start > TIMEOUT_MS)
+            finalizeHome(best);
         },
         (err) => { console.warn("Geo error", err); alert("Failed: " + err.message); clearWatch(); },
         { enableHighAccuracy: true, maximumAge: 0, timeout: 20000 }
@@ -232,12 +238,12 @@
 
     // ---------------- Proximity Alert ----------------
     let lastAlertTime = 0;
-    function checkBusProximity(lat,lng){
-      if (!home) return;
-      const d = L.latLng(home.lat, home.lng).distanceTo([lat,lng]);
+    function checkBusProximity(lat, lng) {
+      if (!home || Date.now() < snoozeUntil) return;
+      const d = L.latLng(home.lat, home.lng).distanceTo([lat, lng]);
       if (isNaN(d)) return;
       const now = Date.now();
-      if (d <= DISTANCE_THRESHOLD && !alertActive && now-lastAlertTime>5000) {
+      if (d <= DISTANCE_THRESHOLD && !alertActive && now - lastAlertTime > 5000) {
         lastAlertTime = now; startContinuousAlert();
       }
     }
