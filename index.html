@@ -680,7 +680,9 @@
         state.busPathCoordinates.push([lat, lng]);
         busPathPolyline.setLatLngs(state.busPathCoordinates);
         statusEl.textContent = `Bus ${data.busId} at ${lat.toFixed(5)}, ${lng.toFixed(5)} (Time: ${data.timestamp || '—'})`;
-        pushTimeline({ title:`${data.busId} — ${lat.toFixed(4)}, ${lng.toFixed(4)}`, sub: data.timestamp || new Date().toLocaleTimeString() });
+        // ***** FIX IS HERE *****
+        // Pass title and sub as separate arguments, not as one object
+        pushTimeline(`${data.busId} — ${lat.toFixed(4)}, ${lng.toFixed(4)}`, data.timestamp || new Date().toLocaleTimeString());
         checkProximity(state.latestBusPosition);
         updateUIState();
       });
@@ -922,3 +924,4 @@
   </script>
 </body>
 </html>
+
