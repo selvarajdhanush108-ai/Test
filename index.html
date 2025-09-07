@@ -1,144 +1,924 @@
 <!doctype html>
 <html lang="en">
-    <head>
-        <meta charset="UTF-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <title>Bus Tracker Live</title>
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
+  <title>Bus Tracker Live - PWA (Upgraded)</title>
+  <link rel="icon" href="icon.png">
+  <meta name="theme-color" content="#6366f1" />
+  <link rel="manifest" href="manifest.json" />
+  <!-- Font Awesome 6 (Free) -->
+<link
+  rel="stylesheet"
+  href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css"
+  xintegrity="sha512-SnH5WK+bZxgPHs44uWIX+LLJAJ9/2PkfQZGviO+4vqnv0V7C1hY6VJ+zV7B2p0LC+OtJk9g6r5c4h6+oz3jVAQ=="
+  crossorigin="anonymous"
+  referrerpolicy="no-referrer"
+/>
 
-        <!-- TailwindCSS -->
-        <script src="https://cdn.tailwindcss.com"></script>
 
-        <!-- Leaflet CSS & JS -->
-        <link
-            rel="stylesheet"
-            href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-        />
-        <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <!-- Tailwind CDN for quick styling (same as your original) -->
+  <script src="https://cdn.tailwindcss.com"></script>
 
-        <!-- Socket.IO -->
-        <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+  <!-- Leaflet (unchanged) -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
-        <style>
-            #map {
-                height: 80vh;
-            }
-            .bus-popup {
-                min-width: 200px;
-            }
-        </style>
-    </head>
-    <body class="bg-gray-100 flex flex-col min-h-screen">
-        <!-- Header -->
-        <header class="bg-indigo-600 text-white py-4 shadow-md">
-            <h1 class="text-center text-2xl sm:text-3xl font-bold">
-                🚌 Bus Tracker Live
-            </h1>
-        </header>
+  <!-- Socket.IO (unchanged) -->
+  <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
 
-        <!-- Controls -->
-        <div
-            class="flex flex-col sm:flex-row items-center justify-center gap-3 p-4 bg-white shadow-md"
-        >
-            <input
-                type="text"
-                id="busId"
-                placeholder="Enter Bus ID"
-                class="border rounded-lg px-4 py-2 w-full sm:w-1/3 focus:ring-2 focus:ring-indigo-500 outline-none"
-            />
-            <button
-                id="findBtn"
-                class="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2 rounded-lg shadow-md transition-all"
-            >
-                Start Tracking
-            </button>
-            <span
-                id="status"
-                class="text-gray-700 text-sm sm:text-base ml-2"
-            ></span>
+  <!-- Fonts -->
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet"/>
+
+  <style>
+    /* ========== Base (kept Poppins like original) ========== */
+    :root {
+      --glass-bg: rgba(255,255,255,0.18);
+      --glass-border: rgba(255,255,255,0.28);
+      --accent: #6366f1;
+      --toast-bg: #111827;
+    }
+    html,body {
+      height: 100%;
+      margin: 0;
+      font-family: "Poppins", sans-serif;
+      -webkit-font-smoothing:antialiased;
+      -moz-osx-font-smoothing:grayscale;
+      background: #f1f5f9;
+      color: #0f172a;
+    }
+
+    /* Full-screen map container (same id as your original) */
+    #map { position: fixed; inset: 0; z-index: 0; }
+
+    /* ===== Notification-shot/Slide-down panel (TOP) =====
+       This is the main change: the glass panel becomes a slide-down
+       sheet that animates from -100% to 0 from the top. */
+    .top-sheet {
+      position: fixed;
+      top: 0;
+      left: 50%;
+      transform: translate(-50%, -110%); /* hidden above */
+      width: 96%;
+      max-width: 920px;
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      background: linear-gradient(180deg, rgba(255,255,255,0.18), rgba(255,255,255,0.12));
+      border-radius: 14px;
+      padding: 14px;
+      box-shadow: 0 12px 40px rgba(2,6,23,0.18);
+      border: 1px solid var(--glass-border);
+      z-index: 9999;
+      transition: transform 280ms cubic-bezier(.2,.9,.2,1), opacity 220ms;
+      opacity: 0;
+      pointer-events: none;
+    }
+    .top-sheet.open {
+      transform: translate(-50%, 12px);
+      opacity: 1;
+      pointer-events: auto;
+    }
+    /* small handle row with centered icon button */
+    .sheet-handle {
+      display:flex;
+      justify-content:center;
+      align-items:center;
+      gap:8px;
+    }
+    .sheet-toggle {
+      background: rgba(0,0,0,0.05);
+      border: 1px solid rgba(0,0,0,0.1);
+      color: #334155;
+      font-size: 16px;
+      cursor: pointer;
+      padding: 6px;
+      border-radius: 999px;
+      width: 36px;
+      height: 36px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background-color 0.2s;
+    }
+    .sheet-toggle:hover {
+        background: rgba(0,0,0,0.1);
+    }
+
+    /* make sheet layout similar to glass-panel original */
+    .sheet-inner {
+      display:flex;
+      flex-direction:column;
+      gap:10px;
+    }
+    .sheet-row {
+      display:flex;
+      gap:10px;
+      align-items:center;
+      flex-wrap:wrap;
+    }
+
+    /* Floating action buttons (kept original look) */
+    .floating-btn {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      z-index: 9998;
+    }
+    .btn-circle {
+      width: 58px;
+      height: 58px;
+      border-radius: 50%;
+      border: none;
+      font-size: 26px;
+      cursor: pointer;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 4px 14px rgba(0,0,0,0.3);
+    }
+
+    /* Toast */
+    #toast {
+      position: fixed;
+      top: -100px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: var(--toast-bg);
+      color: #fff;
+      padding: 12px 20px;
+      border-radius: 999px;
+      font-weight: 600;
+      z-index: 10000;
+      opacity: 0;
+      transition: all 0.35s ease;
+    }
+    #toast.show { top: 18px; opacity: 1; }
+
+    /* Proximity modal remains similar to original */
+    #proximity-alert {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.5);
+      z-index: 9997;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.25s ease;
+    }
+    #proximity-alert.show { opacity: 1; pointer-events: auto; }
+    .alert-panel {
+      background: white;
+      border-radius: 14px;
+      padding: 1.6rem;
+      width: 90%;
+      max-width: 420px;
+      text-align: center;
+      box-shadow: 0 10px 36px rgba(2,6,23,0.2);
+      transform: scale(.98);
+    }
+    #proximity-alert.show .alert-panel { transform: scale(1); }
+
+    /* Speed widget circular like original */
+    #speed-display {
+      position: fixed;
+      bottom: 20px;
+      left: 20px;
+      width: 100px;
+      height: 100px;
+      background: rgba(17,24,39,0.88);
+      border-radius: 50%;
+      color: white;
+      display: none; /* initially */
+      z-index: 9996;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      box-shadow: 0 6px 20px rgba(0,0,0,0.26);
+      border: 2px solid rgba(255,255,255,0.18);
+      font-family: "Poppins", sans-serif;
+    }
+    #speed-value { font-size: 28px; font-weight: 600; }
+    #speed-unit { font-size: 12px; opacity: 0.85; margin-top: 4px; }
+
+    /* timeline (kept similar) */
+    .timeline { max-height: 140px; overflow:auto; font-size:13px; color:#374151; background: rgba(255,255,255,0.88); padding:8px; border-radius:8px; }
+
+    /* responsive tweaks */
+    @media (max-width: 640px) {
+      .top-sheet { width: 98%; left: 50%; transform: translate(-50%, -120%); border-radius:12px; padding:12px; }
+      .top-sheet.open { transform: translate(-50%, 6px); }
+      .sheet-row { gap:8px; }
+      .btn-circle { width: 52px; height: 52px; font-size:22px; }
+    }
+  </style>
+</head>
+
+<body>
+  <!-- ===== slide-down sheet toggle button ===== -->
+  <div style="position:fixed; left:50%; transform:translateX(-50%); top:8px; z-index:10001;">
+    <button id="sheetToggle" class="sheet-toggle" aria-expanded="false" title="Toggle controls">
+      <i class="fa-solid fa-bars"></i>
+    </button>
+  </div>
+
+  <div id="topSheet" class="top-sheet" role="region" aria-label="Controls panel">
+    <div class="sheet-handle">
+      <!-- little visual handle -->
+      <div style="width:36px; height:4px; background:rgba(0,0,0,0.12); border-radius:99px;"></div>
+    </div>
+
+    <div class="sheet-inner">
+      <!-- row 1: bus select, input, start/stop -->
+      <div class="sheet-row">
+        <select id="busSelect" class="rounded-lg px-3 py-2 w-full sm:w-48 border border-gray-300 bg-white"></select>
+
+        <input id="busIdInput" type="text" placeholder="Enter Bus ID"
+               class="border border-gray-300 rounded-lg px-4 py-2 w-full sm:w-72 focus:ring-2 focus:ring-indigo-500 outline-none" />
+
+        <button id="findBtn" class="rounded-lg px-6 py-2 bg-indigo-600 text-white shadow-md w-full sm:w-auto">Start Tracking</button>
+      </div>
+
+      <!-- row 2: status + timeline -->
+      <div class="sheet-row" style="justify-content:space-between; align-items:flex-start;">
+        <div style="flex:1;">
+          <div id="status" class="text-sm text-slate-700">Enter a Bus ID to begin.</div>
+          <div style="margin-top:8px;" class="text-xs text-slate-500">Tip: Tap a bus from the list or type ID manually.</div>
         </div>
 
-        <!-- Map -->
-        <div id="map" class="w-full flex-1 shadow-inner"></div>
-
-        <script>
-            const map = L.map("map").setView([20.5937, 78.9629], 5);
-
-            L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-                maxZoom: 19,
-            }).addTo(map);
-
-            const socket = io("https://bus-tracker-server-ajmu.onrender.com"); // Replace with your server
-
-            const busIcon = L.icon({
-                iconUrl: "https://img.icons8.com/color/48/000000/bus.png",
-                iconSize: [40, 40],
-                iconAnchor: [20, 20],
-                popupAnchor: [0, -25],
-            });
-
-            let busMarker = null;
-            let trackingBusId = null;
-            const statusEl = document.getElementById("status");
-            const findBtn = document.getElementById("findBtn");
-
-            function startTracking() {
-                trackingBusId = document.getElementById("busId").value.trim();
-                if (!trackingBusId) {
-                    statusEl.textContent = "Enter a Bus ID";
-                    return;
-                }
-                statusEl.textContent = `Tracking bus ${trackingBusId}...`;
-                findBtn.textContent = "Stop Tracking";
-                findBtn.classList.add("stop");
-            }
-
-            function stopTracking() {
-                trackingBusId = null;
-                statusEl.textContent = "Tracking stopped";
-                findBtn.textContent = "Start Tracking";
-                findBtn.classList.remove("stop");
-                if (busMarker) {
-                    map.removeLayer(busMarker);
-                    busMarker = null;
-                }
-            }
-
-            findBtn.addEventListener("click", () => {
-                if (!trackingBusId) startTracking();
-                else stopTracking();
-            });
-
-            socket.on("busLocationUpdate", (data) => {
-                if (!trackingBusId || data.busId !== trackingBusId) return;
-
-                const lat = data.latitude;
-                const lng = data.longitude;
-                const timestamp = data.timestamp; // Assume already in IST
-
-                if (!lat || !lng || !timestamp) return;
-
-                const popupContent = `
-        <div class="bus-popup p-2">
-          <div class="font-semibold text-indigo-700 text-lg">Bus: ${data.busId}</div>
-          <div class="text-gray-700">Lat: ${lat.toFixed(5)}</div>
-          <div class="text-gray-700">Lng: ${lng.toFixed(5)}</div>
-          <div class="text-gray-600">Time (IST): ${timestamp}</div>
+        <div style="width:260px;">
+          <div style="font-weight:600; margin-bottom:6px;">Timeline</div>
+          <div id="timeline" class="timeline"></div>
         </div>
-      `;
+      </div>
 
-                if (!busMarker) {
-                    busMarker = L.marker([lat, lng], { icon: busIcon })
-                        .addTo(map)
-                        .bindPopup(popupContent)
-                        .openPopup();
-                    map.setView([lat, lng], 15);
-                } else {
-                    busMarker.setLatLng([lat, lng]);
-                    busMarker.getPopup().setContent(popupContent);
-                }
+      <!-- row 3: action buttons -->
+      <div class="sheet-row" style="justify-content:flex-start; flex-wrap:wrap;">
+        <button id="clearPathBtn" class="rounded-lg px-4 py-2 bg-gray-200">Clear Path</button>
+        <button id="lowPowerBtn" class="rounded-lg px-4 py-2 bg-gray-200">Low Power: Off</button>
+        <button id="darkModeBtn" class="rounded-lg px-4 py-2 bg-gray-200">Dark</button>
+        <button id="setHomeBtn" class="rounded-lg px-4 py-2 bg-green-500 text-white">Set Home</button>
+        <button id="fitBoundsBtnSheet" class="rounded-lg px-4 py-2 bg-purple-500 text-white">Fit Home & Bus</button>
+      </div>
 
-                statusEl.textContent = `Bus ${data.busId} at ${lat.toFixed(5)}, ${lng.toFixed(5)} (Time: ${timestamp})`;
-            });
-        </script>
-    </body>
+      <!-- NEW CLOSE BUTTON -->
+      <div class="sheet-row mt-3 pt-3 border-t border-gray-200/50 justify-center">
+        <button id="closeSheetBtn" class="rounded-lg px-8 py-2 bg-gray-200 text-gray-700 font-semibold text-sm hover:bg-gray-300 transition-colors">
+            Close
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== Map (same id, unchanged) ===== -->
+  <div id="map"></div>
+
+  <!-- Floating action buttons (kept) -->
+  <div class="floating-btn" aria-hidden="false">
+    <button id="mapsBtn" title="Open in Google Maps" class="btn-circle" style="background: #f97316" disabled>📍</button>
+    <button id="centerBtn" title="Center on Bus" class="btn-circle" style="background: #eab308" disabled>🎯</button>
+    <button id="fitBoundsBtn" title="Fit Home and Bus" class="btn-circle" style="background: #8b5cf6" disabled>⛶</button>
+    <button id="terrainBtn" title="Toggle Map View" class="btn-circle" style="background: #2563eb">🗺️</button>
+    <button id="setHomeBtnFloating" title="Set Home" class="btn-circle" style="background: #22c55e">🏠</button>
+  </div>
+
+  <!-- Toast & Proximity (unchanged but wired) -->
+  <div id="toast"></div>
+
+  <div id="proximity-alert" aria-hidden="true">
+    <div class="alert-panel">
+      <svg class="mx-auto h-20 w-20 text-green-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M8.25 18.75a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h6m-9 0H3.375a1.125 1.125 0 01-1.125-1.125V14.25m17.25 4.5a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h1.125c.621 0 1.125-.504 1.125-1.125V14.25m-17.25 4.5v-1.875a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 01.75 12V5.625c0-.621.504-1.125 1.125-1.125h17.25c.621 0 1.125.504 1.125 1.125v6.375c0 .621-.504 1.125-1.125 1.125h-1.5a3.375 3.375 0 00-3.375 3.375v1.875"/>
+      </svg>
+      <h2 class="mt-4 text-2xl font-bold text-gray-800">Bus is Approaching!</h2>
+      <p class="mt-2 text-gray-600">The bus is now within 2km of your home.</p>
+      <div class="mt-4 flex justify-center gap-3">
+        <button id="dismissAlertBtn" class="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-6 rounded-full">Dismiss</button>
+        <button id="snoozeBtn" class="bg-gray-200 hover:bg-gray-300 text-black font-bold py-2 px-6 rounded-full">Snooze 30m</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Speed display -->
+  <div id="speed-display" class="flex">
+    <div id="speed-value">--</div>
+    <div id="speed-unit">km/h</div>
+  </div>
+
+  <!-- ===========================
+       JavaScript (big block)
+       Keep your existing logic, preserve behaviors; only upgrade UI + sheet
+       =========================== -->
+  <script>
+    // =========================
+    // Configuration & State
+    // =========================
+    const DISTANCE_THRESHOLD_METERS = 2000;
+    const ALERT_RESET_INTERVAL_MS = 30 * 60 * 1000; // 30 minutes
+    const LAST_POS_KEY_PREFIX = 'lastPos_'; // last known position per bus
+    const TRACKING_KEY = 'trackingBusId';
+    const SNOOZE_KEY = 'snoozedBuses';
+
+    let state = {
+      trackingBusId: null,
+      latestBusPosition: null,
+      latestBusSpeed: null,
+      home: null,
+      isAlertActive: false,
+      busPathCoordinates: [],
+      timeline: [],
+      lowPower: false
+    };
+
+    // Map & marker vars (existing)
+    let map, busMarker, homeMarker, homeCircle, busPathPolyline, normalLayer, hybridLayer, terrainLayer;
+
+    // Audio
+    const proximityAlertSound = new Audio('https://actions.google.com/sounds/v1/alarms/alarm_clock.ogg');
+    proximityAlertSound.loop = true;
+
+    // DOM refs
+    const sheetToggle = document.getElementById('sheetToggle');
+    const topSheet = document.getElementById('topSheet');
+    const closeSheetBtn = document.getElementById('closeSheetBtn'); // New button
+    const busIdInput = document.getElementById('busIdInput');
+    const busSelect = document.getElementById('busSelect');
+    const findBtn = document.getElementById('findBtn');
+    const statusEl = document.getElementById('status');
+    const toast = document.getElementById('toast');
+    const proximityAlert = document.getElementById('proximity-alert');
+    const dismissAlertBtn = document.getElementById('dismissAlertBtn');
+    const snoozeBtn = document.getElementById('snoozeBtn');
+    const mapsBtn = document.getElementById('mapsBtn');
+    const centerBtn = document.getElementById('centerBtn');
+    const fitBoundsBtn = document.getElementById('fitBoundsBtn');
+    const setHomeBtn = document.getElementById('setHomeBtn');
+    const setHomeBtnFloating = document.getElementById('setHomeBtnFloating');
+    const terrainBtn = document.getElementById('terrainBtn');
+    const speedDisplay = document.getElementById('speed-display');
+    const speedValue = document.getElementById('speed-value');
+    const timelineEl = document.getElementById('timeline');
+    const clearPathBtn = document.getElementById('clearPathBtn');
+    const lowPowerBtn = document.getElementById('lowPowerBtn');
+    const darkModeBtn = document.getElementById('darkModeBtn');
+    const fitBoundsBtnSheet = document.getElementById('fitBoundsBtnSheet');
+
+    // =========================
+    // Utility & UI helpers
+    // =========================
+    function showToast(msg, duration = 2500){
+      toast.textContent = msg;
+      toast.classList.add('show');
+      setTimeout(()=> toast.classList.remove('show'), duration);
+    }
+
+    function pushTimeline(title, sub = ''){
+      state.timeline.unshift({ title, sub });
+      state.timeline = state.timeline.slice(0,8);
+      renderTimeline();
+    }
+    function renderTimeline(){
+      timelineEl.innerHTML = state.timeline.map(t => `<div class="mb-1"><strong>${t.title}</strong><div class="text-xs text-gray-500">${t.sub}</div></div>`).join('');
+    }
+
+    function updateUIState(){
+      findBtn.disabled = !busIdInput.value.trim();
+      mapsBtn.disabled = !state.latestBusPosition;
+      centerBtn.disabled = !state.latestBusPosition;
+      fitBoundsBtn.disabled = !(state.latestBusPosition && state.home);
+      fitBoundsBtnSheet.disabled = !(state.latestBusPosition && state.home);
+
+      findBtn.textContent = state.trackingBusId ? 'Stop Tracking' : 'Start Tracking';
+      lowPowerBtn.textContent = `Low Power: ${state.lowPower ? 'On' : 'Off'}`;
+      if (state.trackingBusId) {
+        findBtn.classList.remove('bg-indigo-600','hover:bg-indigo-700');
+        findBtn.classList.add('bg-red-600','hover:bg-red-700');
+      } else {
+        findBtn.classList.remove('bg-red-600','hover:bg-red-700');
+        findBtn.classList.add('bg-indigo-600','hover:bg-indigo-700');
+      }
+    }
+
+    // =========================
+    // Map init (kept)
+    // =========================
+    function initMap(){
+      map = L.map('map').setView([20.5937,78.9629], 5);
+
+      normalLayer = L.tileLayer(
+        "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+        { maxZoom: 19, attribution: "© OpenStreetMap" },
+      ).addTo(map);
+
+      const esriImagery = L.tileLayer(
+        "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+        { maxZoom: 20, attribution: "© Esri" },
+      );
+      const esriLabels = L.tileLayer(
+        "https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}",
+        { maxZoom: 20, attribution: "© Esri" },
+      );
+      hybridLayer = L.layerGroup([esriImagery, esriLabels]);
+      terrainLayer = L.tileLayer(
+        "https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}",
+        { maxZoom: 20, attribution: "© Esri" },
+      );
+
+      const busIcon = L.icon({
+        iconUrl: "https://img.icons8.com/color/48/000000/bus.png",
+        iconSize: [40,40],
+        iconAnchor: [20,20],
+        popupAnchor: [0,-25],
+      });
+      busMarker = L.marker([0,0], { icon: busIcon });
+
+      busPathPolyline = L.polyline([], { color: '#ef4444', weight: 4, opacity: 0.85 }).addTo(map);
+    }
+
+    // =========================
+    // Home & proximity (preserve mechanism)
+    // =========================
+    function loadHome(){
+      const saved = localStorage.getItem("homeLocation");
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
+          if (typeof parsed.lat === 'number' && typeof parsed.lng === 'number') {
+            state.home = parsed;
+            drawHome();
+          }
+        } catch(e){ console.error("Failed to parse home", e); }
+      }
+    }
+
+    function drawHome(){
+      if (!state.home) return;
+      if (homeMarker) map.removeLayer(homeMarker);
+      homeMarker = L.marker([state.home.lat, state.home.lng], {
+        icon: L.icon({
+          iconUrl: "https://img.icons8.com/ios-filled/50/228BE6/home.png",
+          iconSize: [35,35],
+          iconAnchor: [17,34],
+        })
+      }).addTo(map).bindPopup("🏠 Your Home");
+
+      if (homeCircle) map.removeLayer(homeCircle);
+      homeCircle = L.circle([state.home.lat, state.home.lng], {
+        radius: DISTANCE_THRESHOLD_METERS,
+        color: "#2563eb",
+        weight: 2,
+        fillOpacity: 0.06,
+      }).addTo(map);
+
+      updateUIState();
+    }
+
+    function setHome(){
+      if (!navigator.geolocation) {
+        showToast("Geolocation is not supported by your browser.");
+        return;
+      }
+      navigator.geolocation.getCurrentPosition((pos) => {
+        state.home = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+
+        if (state.isAlertActive) {
+          state.isAlertActive = false;
+          proximityAlert.classList.remove("show");
+          proximityAlertSound.pause();
+          proximityAlertSound.currentTime = 0;
+        }
+
+        clearSnoozeForCurrentBus();
+
+        localStorage.setItem("homeLocation", JSON.stringify(state.home));
+        drawHome();
+        map.setView([state.home.lat, state.home.lng], 15);
+        showToast("Home location updated! Proximity alert reset.");
+        if (state.trackingBusId && state.latestBusPosition) {
+          checkProximity(state.latestBusPosition);
+        }
+      }, (err) => {
+        showToast("Failed to get location: " + err.message);
+      }, { enableHighAccuracy: true });
+    }
+
+    function getSnoozedBuses() {
+      try { return JSON.parse(localStorage.getItem(SNOOZE_KEY)) || {}; } catch { return {}; }
+    }
+
+    function isBusSnoozed(busId) {
+      const snoozed = getSnoozedBuses();
+      const ts = snoozed[busId];
+      if (!ts) return false;
+      return (Date.now() - ts) < ALERT_RESET_INTERVAL_MS;
+    }
+
+    function snoozeAlertForCurrentBus() {
+      if (!state.trackingBusId) return;
+      const snoozed = getSnoozedBuses();
+      snoozed[state.trackingBusId] = Date.now();
+      localStorage.setItem(SNOOZE_KEY, JSON.stringify(snoozed));
+      showToast(`Alert for bus ${state.trackingBusId} snoozed for 30 minutes.`);
+      hideProximityAlert();
+    }
+
+    function clearSnoozeForCurrentBus() {
+      if (!state.trackingBusId) return;
+      const snoozed = getSnoozedBuses();
+      if (snoozed[state.trackingBusId]) {
+        delete snoozed[state.trackingBusId];
+        localStorage.setItem(SNOOZE_KEY, JSON.stringify(snoozed));
+        console.log(`Snooze cleared for ${state.trackingBusId}`);
+      }
+    }
+
+    function clearExpiredSnoozes() {
+      const snoozed = getSnoozedBuses();
+      let changed = false;
+      Object.keys(snoozed).forEach(busId => {
+        if ((Date.now() - snoozed[busId]) >= ALERT_RESET_INTERVAL_MS) {
+          delete snoozed[busId];
+          changed = true;
+        }
+      });
+      if (changed) localStorage.setItem(SNOOZE_KEY, JSON.stringify(snoozed));
+    }
+
+    function clearSnoozesOnReload() {
+      localStorage.removeItem(SNOOZE_KEY);
+      console.log("Snoozes cleared on reload (per user request)");
+    }
+
+    // =========================
+    // Alert trigger (preserve)
+    // =========================
+    function checkProximity(busPosition) {
+      if (!state.home || !state.trackingBusId) return;
+      if (isBusSnoozed(state.trackingBusId)) return;
+      const distance = map.distance([state.home.lat, state.home.lng], [busPosition.lat, busPosition.lng]);
+      if (distance <= DISTANCE_THRESHOLD_METERS) {
+        showProximityAlert();
+      }
+    }
+
+    function showProximityAlert(){
+      if (state.isAlertActive) return;
+      state.isAlertActive = true;
+      proximityAlert.classList.add("show");
+
+      const playPromise = proximityAlertSound.play();
+      if (playPromise !== undefined) {
+        playPromise.catch(error => {
+          console.error("Audio playback failed:", error);
+          showToast("Bus is near! (Audio may be blocked)", 4000);
+        });
+      }
+
+      if ('Notification' in window && Notification.permission === 'granted') {
+        new Notification("Bus is Approaching!", {
+          body: "The bus is now within 2km of your home.",
+          icon: "icon.png"
+        });
+      }
+    }
+
+    function hideProximityAlert(){
+      if (!state.isAlertActive) return;
+      state.isAlertActive = false;
+      proximityAlert.classList.remove("show");
+      proximityAlertSound.pause();
+      proximityAlertSound.currentTime = 0;
+      snoozeAlertForCurrentBus();
+    }
+
+    // =========================
+    // Persistence helpers
+    // =========================
+    function persistLastPosition(busId, pos){
+      if (!busId || !pos) return;
+      try { localStorage.setItem(LAST_POS_KEY_PREFIX + busId, JSON.stringify(pos)); } catch(e){ console.warn('Failed to save last pos', e); }
+    }
+    function loadLastPosition(busId){
+      try {
+        const raw = localStorage.getItem(LAST_POS_KEY_PREFIX + busId);
+        if (!raw) return null;
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed.lat === 'number' && typeof parsed.lng === 'number') return parsed;
+      } catch(e){}
+      return null;
+    }
+
+    // =========================
+    // Socket & Tracking (preserve existing flow)
+    // =========================
+    let socket = null;
+    let socketConnected = false;
+    let lastSocketUpdateAt = 0;
+    let throttledUpdateInterval = 5000; // default 5s
+    let lowPowerThrottle = 15000; // 15s when low power mode on
+
+    function setupSocket(){
+      socket = io("https://bus-tracker-server-ajmu.onrender.com");
+      socket.on('connect', () => {
+        socketConnected = true;
+        console.log('Socket connected');
+        if (!state.trackingBusId) statusEl.textContent = 'Connected to server. Enter a Bus ID to begin.';
+        else statusEl.textContent = `Connected — tracking ${state.trackingBusId}`;
+
+        if (state.trackingBusId) {
+          const last = loadLastPosition(state.trackingBusId);
+          if (last) {
+            state.latestBusPosition = last;
+            ensureBusMarkerAndUI(last, { busId: state.trackingBusId, speed:null, timestamp:'(cached)' });
+            checkProximity(last);
+          }
+        }
+      });
+
+      socket.on('connect_error', (err) => {
+        socketConnected = false;
+        console.error('Socket.IO connection error:', err);
+        statusEl.textContent = 'Error: Could not connect to tracking server.';
+      });
+
+      socket.on("busLocationUpdate", (data) => {
+        const now = Date.now();
+        const throttleMs = state.lowPower ? lowPowerThrottle : throttledUpdateInterval;
+
+        if (data && data.busId && typeof data.latitude === 'number' && typeof data.longitude === 'number') {
+          persistLastPosition(data.busId, { lat:data.latitude, lng:data.longitude, timestamp: data.timestamp || Date.now() });
+        }
+
+        if (!state.trackingBusId || data.busId !== state.trackingBusId) return;
+
+        if (now - lastSocketUpdateAt < throttleMs) {
+          statusEl.textContent = `Bus ${data.busId} update skipped (low freq).`;
+          state.latestBusPosition = { lat: data.latitude, lng: data.longitude };
+          return;
+        }
+        lastSocketUpdateAt = now;
+
+        if (typeof data.latitude !== 'number' || typeof data.longitude !== 'number') return;
+        const lat = data.latitude, lng = data.longitude;
+
+        if (typeof data.speed === 'number' && data.speed >= 0) {
+          const speedKmh = data.speed * 3.6;
+          state.latestBusSpeed = speedKmh;
+          speedValue.textContent = Math.round(speedKmh);
+        } else {
+          state.latestBusSpeed = null;
+          speedValue.textContent = '--';
+        }
+
+        state.latestBusPosition = { lat, lng };
+        ensureBusMarkerAndUI({ lat, lng }, data);
+        state.busPathCoordinates.push([lat, lng]);
+        busPathPolyline.setLatLngs(state.busPathCoordinates);
+        statusEl.textContent = `Bus ${data.busId} at ${lat.toFixed(5)}, ${lng.toFixed(5)} (Time: ${data.timestamp || '—'})`;
+        pushTimeline({ title:`${data.busId} — ${lat.toFixed(4)}, ${lng.toFixed(4)}`, sub: data.timestamp || new Date().toLocaleTimeString() });
+        checkProximity(state.latestBusPosition);
+        updateUIState();
+      });
+    }
+
+    function ensureBusMarkerAndUI(pos, data = {}) {
+      if (!pos) return;
+      if (!map.hasLayer(busMarker)) {
+        busMarker.setLatLng(pos).addTo(map).bindPopup(getPopupContent(data)).openPopup();
+        map.setView(pos, 15);
+      } else {
+        busMarker.setLatLng(pos);
+        busMarker.getPopup()?.setContent(getPopupContent(data));
+      }
+
+      if (speedDisplay) speedDisplay.style.display = 'flex';
+      mapsBtn.disabled = false;
+      centerBtn.disabled = false;
+      if (state.home) fitBoundsBtn.disabled = false;
+    }
+
+    function getPopupContent(data = {}) {
+      const lat = (state.latestBusPosition?.lat || 0);
+      const lng = (state.latestBusPosition?.lng || 0);
+      const speedText = state.latestBusSpeed !== null ? `<div>💨 Speed: ${Math.round(state.latestBusSpeed)} km/h</div>` : '';
+      return `<div class="p-2 space-y-1">
+        <div class="font-semibold text-indigo-700 text-lg">Bus: ${data.busId || state.trackingBusId || '—'}</div>
+        <div>📍 Lat: ${lat.toFixed(5)}, Lng: ${lng.toFixed(5)}</div>
+        ${speedText}
+        <div>🕒 ${data.timestamp || '—'}</div>
+      </div>`;
+    }
+
+    // =========================
+    // Tracking controls (preserve)
+    // =========================
+    function startTracking(){
+      state.latestBusSpeed = null;
+      if (speedDisplay) {
+        speedDisplay.style.display = 'flex';
+        speedValue.textContent = '--';
+      }
+
+      const busIdToTrack = busIdInput.value.trim();
+      if (!busIdToTrack) return;
+
+      if (state.trackingBusId && state.trackingBusId !== busIdToTrack) {
+        state.busPathCoordinates = [];
+        if (busPathPolyline) busPathPolyline.setLatLngs(state.busPathCoordinates);
+      } else if (!state.trackingBusId) {
+        state.busPathCoordinates = [];
+        if (busPathPolyline) map.removeLayer(busPathPolyline);
+        busPathPolyline = L.polyline([], { color: '#ef4444', weight: 4, opacity: 0.8 }).addTo(map);
+      }
+
+      state.trackingBusId = busIdToTrack;
+      try { localStorage.setItem(TRACKING_KEY, state.trackingBusId); } catch(e){}
+      statusEl.textContent = `Attempting to track bus ${state.trackingBusId}...`;
+
+      const cached = loadLastPosition(state.trackingBusId);
+      if (cached) {
+        state.latestBusPosition = { lat: cached.lat, lng: cached.lng };
+        ensureBusMarkerAndUI(state.latestBusPosition, { busId: state.trackingBusId, timestamp: cached.timestamp || '(cached)' });
+        state.busPathCoordinates.push([cached.lat, cached.lng]);
+        busPathPolyline.setLatLngs(state.busPathCoordinates);
+        checkProximity(state.latestBusPosition);
+      }
+
+      updateUIState();
+    }
+
+    function stopTracking(){
+      statusEl.textContent = `Tracking stopped for bus ${state.trackingBusId}.`;
+      state.trackingBusId = null;
+      try { localStorage.removeItem(TRACKING_KEY); } catch(e){}
+      state.latestBusPosition = null;
+      state.latestBusSpeed = null;
+      if (speedDisplay) speedDisplay.style.display = 'none';
+      if (busMarker && map.hasLayer(busMarker)) map.removeLayer(busMarker);
+      updateUIState();
+    }
+
+    function closeSheet() {
+        topSheet.classList.remove('open');
+        sheetToggle.setAttribute('aria-expanded', 'false');
+        sheetToggle.innerHTML = '<i class="fa-solid fa-bars"></i>';
+    }
+
+    // =========================
+    // Event wiring
+    // =========================
+    function setupEventListeners(){
+      // sheet toggle (icon button)
+      sheetToggle.addEventListener('click', () => {
+        const expanded = topSheet.classList.toggle('open');
+        sheetToggle.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+        sheetToggle.innerHTML = expanded ? '<i class="fa-solid fa-chevron-up"></i>' : '<i class="fa-solid fa-bars"></i>';
+      });
+
+      // New close button at the bottom
+      closeSheetBtn.addEventListener('click', closeSheet);
+
+      // Start / Stop
+      findBtn.addEventListener('click', () => {
+        const busIdFromInput = busIdInput.value.trim();
+        if (state.trackingBusId && state.trackingBusId === busIdFromInput) stopTracking();
+        else if (busIdFromInput) startTracking();
+      });
+
+      busIdInput.addEventListener('input', updateUIState);
+      dismissAlertBtn.addEventListener('click', hideProximityAlert);
+      snoozeBtn.addEventListener('click', snoozeAlertForCurrentBus);
+
+      // Home
+      setHomeBtn.addEventListener('click', setHome);
+      setHomeBtnFloating.addEventListener('click', setHome);
+
+      // Floating actions
+      mapsBtn.addEventListener('click', () => {
+        if (!state.latestBusPosition) return;
+        const { lat, lng } = state.latestBusPosition;
+        window.open(`https://www.google.com/maps/search/?api=1&query=${lat},${lng}`, "_blank");
+      });
+      centerBtn.addEventListener('click', () => {
+        if (!state.latestBusPosition) return;
+        map.setView(state.latestBusPosition, 16, { animate: true });
+      });
+      fitBoundsBtn.addEventListener('click', () => {
+        if (!state.home || !state.latestBusPosition) return;
+        const bounds = L.latLngBounds([state.home, state.latestBusPosition]);
+        map.fitBounds(bounds, { padding: [50, 50], animate: true });
+      });
+      fitBoundsBtnSheet.addEventListener('click', () => {
+        if (!state.home || !state.latestBusPosition) return;
+        const bounds = L.latLngBounds([state.home, state.latestBusPosition]);
+        map.fitBounds(bounds, { padding: [50, 50], animate: true });
+      });
+
+      terrainBtn.addEventListener('click', () => {
+        if (map.hasLayer(normalLayer)) {
+          map.removeLayer(normalLayer);
+          map.addLayer(hybridLayer);
+        } else if (map.hasLayer(hybridLayer)) {
+          map.removeLayer(hybridLayer);
+          map.addLayer(terrainLayer);
+        } else {
+          map.removeLayer(terrainLayer);
+          map.addLayer(normalLayer);
+        }
+      });
+
+      // extra UI
+      clearPathBtn.addEventListener('click', () => {
+        state.busPathCoordinates = [];
+        if (busPathPolyline) busPathPolyline.setLatLngs([]);
+        showToast('Path cleared');
+      });
+
+      lowPowerBtn.addEventListener('click', () => {
+        state.lowPower = !state.lowPower;
+        showToast(`Low Power ${state.lowPower ? 'enabled' : 'disabled'}`);
+        updateUIState();
+      });
+
+      darkModeBtn.addEventListener('click', () => {
+        document.body.classList.toggle('dark');
+        darkModeBtn.textContent = document.body.classList.contains('dark') ? 'Light' : 'Dark';
+        showToast('Theme toggled');
+      });
+
+      // bus select
+      busSelect.addEventListener('change', () => {
+        const v = busSelect.value;
+        if (v) {
+          busIdInput.value = v;
+          updateUIState();
+        }
+      });
+    }
+
+    async function fetchActiveBuses(){
+      try {
+        const resp = await fetch('/activeBuses', { cache: 'no-cache' });
+        if (!resp.ok) throw new Error('no-list');
+        const arr = await resp.json();
+        if (Array.isArray(arr)) {
+          busSelect.innerHTML = `<option value=\"\">Select Bus</option>` + arr.map(b => `<option value=\"${b}\">${b}</option>`).join('');
+          return;
+        }
+      } catch(e){
+        busSelect.innerHTML = `<option value=\"\">(No list)</option>`;
+      }
+    }
+
+    function restoreTrackingFromStorage(){
+      try {
+        const tid = localStorage.getItem(TRACKING_KEY);
+        if (tid) {
+          busIdInput.value = tid;
+          state.trackingBusId = tid;
+          updateUIState();
+          const cached = loadLastPosition(tid);
+          if (cached) {
+            state.latestBusPosition = { lat: cached.lat, lng: cached.lng };
+            ensureBusMarkerAndUI(state.latestBusPosition, { busId: tid, timestamp: cached.timestamp || '(cached)' });
+            state.busPathCoordinates.push([cached.lat, cached.lng]);
+            if (busPathPolyline) busPathPolyline.setLatLngs(state.busPathCoordinates);
+            checkProximity(state.latestBusPosition);
+          }
+        }
+      } catch(e){}
+    }
+
+    if ('Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission().then(p => console.log('Notification perm:', p));
+    }
+
+    // =========================
+    // App init on load
+    // =========================
+    window.addEventListener('load', () => {
+      initMap();
+      clearSnoozesOnReload();
+      clearExpiredSnoozes();
+      setupEventListeners();
+      fetchActiveBuses(); // best-effort
+      setupSocket();
+      loadHome();
+      restoreTrackingFromStorage();
+      updateUIState();
+
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('/sw.js')
+          .then(reg => console.log('ServiceWorker registered:', reg.scope))
+          .catch(err => console.warn('SW registration failed:', err));
+      }
+    });
+
+  </script>
+</body>
 </html>
