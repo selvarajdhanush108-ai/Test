@@ -1,7 +1,7 @@
 {
-  "name": "Bus Tracker Live",
+  "name": "Passenger App",
   "short_name": "Bus Tracker",
-  "start_url": "Bus.html",
+  "start_url": "index.html",
   "display": "standalone",
   "background_color": "#f1f5f9",
   "theme_color": "#6366f1",
