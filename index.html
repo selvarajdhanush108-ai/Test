@@ -222,9 +222,9 @@
 <body>
   <!-- ===== slide-down sheet toggle button ===== -->
   <div style="position:fixed; left:50%; transform:translateX(-50%); top:8px; z-index:10001;">
-    <button id="sheetToggle" class="sheet-toggle" aria-expanded="false" title="Toggle controls">
+    <b><button id="sheetToggle" class="sheet-toggle" aria-expanded="false" title="Toggle controls" color="text-black">
       <i class="fa-solid fa-bars"></i>
-    </button>
+    </button></b>
   </div>
 
   <div id="topSheet" class="top-sheet" role="region" aria-label="Controls panel">
@@ -680,9 +680,7 @@
         state.busPathCoordinates.push([lat, lng]);
         busPathPolyline.setLatLngs(state.busPathCoordinates);
         statusEl.textContent = `Bus ${data.busId} at ${lat.toFixed(5)}, ${lng.toFixed(5)} (Time: ${data.timestamp || '—'})`;
-        // ***** FIX IS HERE *****
-        // Pass title and sub as separate arguments, not as one object
-        pushTimeline(`${data.busId} — ${lat.toFixed(4)}, ${lng.toFixed(4)}`, data.timestamp || new Date().toLocaleTimeString());
+        pushTimeline({ title:`${data.busId} — ${lat.toFixed(4)}, ${lng.toFixed(4)}`, sub: data.timestamp || new Date().toLocaleTimeString() });
         checkProximity(state.latestBusPosition);
         updateUIState();
       });
@@ -924,5 +922,3 @@
   </script>
 </body>
 </html>
-
-
