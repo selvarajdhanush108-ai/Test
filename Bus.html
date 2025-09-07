@@ -4,10 +4,11 @@
         <meta charset="UTF-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <title>Bus Tracker Live - PWA</title>
+        <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🚌</text></svg>">
 
         <!-- PWA Meta Tags -->
         <meta name="theme-color" content="#6366f1" />
-        <link rel="apple-touch-icon" href="icon-192.png" />
+        <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🚌</text></svg>" />
         <link rel="manifest" href="manifest.json" />
 
         <script src="https://cdn.tailwindcss.com"></script>
@@ -148,6 +149,38 @@
             #proximity-alert.show .alert-panel {
                 transform: scale(1);
             }
+
+            /* Speed Display */
+            #speed-display {
+                position: fixed;
+                bottom: 20px;
+                left: 20px;
+                width: 100px;
+                height: 100px;
+                background: rgba(17, 24, 39, 0.8); /* dark gray with transparency */
+                backdrop-filter: blur(8px);
+                -webkit-backdrop-filter: blur(8px);
+                border-radius: 50%;
+                color: white;
+                display: none; /* Initially hidden */
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+                z-index: 999;
+                font-family: "Poppins", sans-serif;
+                box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+                border: 2px solid rgba(255, 255, 255, 0.4);
+            }
+            #speed-value {
+                font-size: 28px;
+                font-weight: 600;
+                line-height: 1;
+            }
+            #speed-unit {
+                font-size: 14px;
+                margin-top: 4px;
+                opacity: 0.8;
+            }
         </style>
     </head>
     
@@ -254,6 +287,11 @@
             </div>
         </div>
 
+        <div id="speed-display">
+            <span id="speed-value">--</span>
+            <span id="speed-unit">km/h</span>
+        </div>
+
         <script>
             // ===================================================================
             // CONFIGURATION & STATE
@@ -265,6 +303,7 @@
             let state = {
                 trackingBusId: null,
                 latestBusPosition: null,
+                latestBusSpeed: null,
                 home: null,
                 isAlertActive: false,
                 busPathCoordinates: [],
@@ -296,6 +335,8 @@
             const fitBoundsBtn = document.getElementById("fitBoundsBtn");
             const setHomeBtn = document.getElementById("setHomeBtn");
             const terrainBtn = document.getElementById("terrainBtn");
+            const speedDisplay = document.getElementById("speed-display");
+            const speedValue = document.getElementById("speed-value");
 
             // ===================================================================
             // MAP INITIALIZATION
@@ -393,6 +434,12 @@
             async function startTracking() {
                  // NOTE: The user click on this button serves as the "user gesture"
                 // that allows the browser to play audio programmatically later.
+                state.latestBusSpeed = null;
+                if (speedDisplay) {
+                    speedDisplay.style.display = 'flex';
+                    speedValue.textContent = '--';
+                }
+
                 const busIdToTrack = busIdInput.value.trim();
                 if (!busIdToTrack) return;
 
@@ -419,6 +466,8 @@
                 statusEl.textContent = `Tracking stopped for bus ${state.trackingBusId}.`;
                 state.trackingBusId = null;
                 state.latestBusPosition = null;
+                state.latestBusSpeed = null;
+                if (speedDisplay) speedDisplay.style.display = 'none';
                 if (busMarker && map.hasLayer(busMarker)) {
                     map.removeLayer(busMarker);
                 }
@@ -626,15 +675,35 @@
 
                 socket.on("busLocationUpdate", (data) => {
                     if (!state.trackingBusId || data.busId !== state.trackingBusId) return;
+                    
+                    console.log("Bus location data received:", data); // For debugging
 
                     const lat = data.latitude, lng = data.longitude;
                     if (typeof lat !== "number" || typeof lng !== "number") return;
 
+                    // Handle Speed
+                    if (speedDisplay.style.display === 'none') {
+                        speedDisplay.style.display = 'flex';
+                    }
+                    if (typeof data.speed === 'number' && data.speed >= 0) {
+                        const speedKmh = data.speed * 3.6;
+                        state.latestBusSpeed = speedKmh;
+                        speedValue.textContent = Math.round(speedKmh);
+                    } else {
+                        state.latestBusSpeed = null;
+                        speedValue.textContent = '--';
+                    }
+
                     state.latestBusPosition = { lat, lng };
+                    const speedText = state.latestBusSpeed !== null 
+                        ? `<div>💨 Speed: ${Math.round(state.latestBusSpeed)} km/h</div>`
+                        : '';
+
                     const popupContent = `
-                        <div class="p-2">
+                        <div class="p-2 space-y-1">
                           <div class="font-semibold text-indigo-700 text-lg">Bus: ${data.busId}</div>
-                          <div>Lat: ${lat.toFixed(5)}, Lng: ${lng.toFixed(5)}</div>
+                          <div>📍 Lat: ${lat.toFixed(5)}, Lng: ${lng.toFixed(5)}</div>
+                          ${speedText}
                           <div>🕒 ${data.timestamp || "—"}</div>
                         </div>`;
 
@@ -660,7 +729,7 @@
             // ===================================================================
             // APP INITIALIZATION
             // ===================================================================
-            // Use 'load' to ensure all external scripts (like Tone.js) are ready
+            // Use 'load' to ensure all external scripts are ready
             window.addEventListener("load", () => {
                 initMap();
                 loadHome();
