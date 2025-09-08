@@ -219,6 +219,51 @@
       .sheet-row { gap:8px; }
       .btn-circle { width: 52px; height: 52px; font-size:22px; }
     }
+
+    /* ===== Branding Footer ===== */
+    .branding-footer {
+      position: fixed;
+      bottom: 12px;
+      left: 50%;
+      transform: translateX(-50%);
+      padding: 8px 16px;
+      background: rgba(17, 24, 39, 0.8); /* Dark glass */
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      border-radius: 999px; /* Pill shape */
+      z-index: 9995; /* Below other UI elements but above map */
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      animation: pulse-glow 3s infinite ease-in-out;
+      transition: transform 0.2s;
+    }
+    .branding-footer:hover {
+        transform: translateX(-50%) scale(1.05); /* Grow on hover */
+    }
+
+    .branding-footer a {
+      color: white;
+      text-decoration: none;
+      font-size: 13px;
+      font-weight: 600;
+      display: block;
+    }
+
+    .branding-footer a span {
+        font-weight: 400;
+        opacity: 0.8;
+    }
+
+    @keyframes pulse-glow {
+      0% {
+        box-shadow: 0 0 12px rgba(99, 102, 241, 0.4);
+      }
+      50% {
+        box-shadow: 0 0 24px rgba(99, 102, 241, 0.7);
+      }
+      100% {
+        box-shadow: 0 0 12px rgba(99, 102, 241, 0.4);
+      }
+    }
   </style>
 </head>
 
@@ -312,6 +357,13 @@
   <div id="speed-display" class="flex">
     <div id="speed-value">--</div>
     <div id="speed-unit">km/h</div>
+  </div>
+
+  <!-- ===== BRANDING FOOTER ===== -->
+  <div class="branding-footer">
+    <a href="https://codux.fun" target="_blank" rel="noopener noreferrer">
+      <span>Powered by</span> <strong>Codux.fun</strong>
+    </a>
   </div>
 
   <!-- ===========================
@@ -963,6 +1015,7 @@
   </script>
 </body>
 </html>
+
 
 
 
