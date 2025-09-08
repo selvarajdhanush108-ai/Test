@@ -85,23 +85,26 @@
       align-items:center;
       gap:8px;
     }
+    /* BUG FIX 3: Made sheet toggle button MUCH more visible */
     .sheet-toggle {
-      background: rgba(0,0,0,0.05);
-      border: 1px solid rgba(0,0,0,0.1);
-      color: #334155;
+      background: #6366f1; /* Using accent color for consistency */
+      border: 2px solid white; /* White border for contrast on the button itself */
+      color: white; /* White icon */
       font-size: 16px;
       cursor: pointer;
       padding: 6px;
       border-radius: 999px;
-      width: 36px;
-      height: 36px;
+      width: 40px; /* slightly bigger */
+      height: 40px; /* slightly bigger */
       display: flex;
       align-items: center;
       justify-content: center;
-      transition: background-color 0.2s;
+      transition: background-color 0.2s, box-shadow 0.2s, transform 0.2s;
+      box-shadow: 0 5px 15px rgba(0,0,0,0.25); /* Stronger shadow */
     }
     .sheet-toggle:hover {
-        background: rgba(0,0,0,0.1);
+        background: #4f46e5; /* Darker indigo on hover */
+        transform: scale(1.05); /* Add a little pop on hover */
     }
 
     /* make sheet layout similar to glass-panel original */
@@ -222,9 +225,9 @@
 <body>
   <!-- ===== slide-down sheet toggle button ===== -->
   <div style="position:fixed; left:50%; transform:translateX(-50%); top:8px; z-index:10001;">
-    <b><button id="sheetToggle" class="sheet-toggle" aria-expanded="false" title="Toggle controls" color="text-black">
+    <button id="sheetToggle" class="sheet-toggle" aria-expanded="false" title="Toggle controls">
       <i class="fa-solid fa-bars"></i>
-    </button></b>
+    </button>
   </div>
 
   <div id="topSheet" class="top-sheet" role="region" aria-label="Controls panel">
@@ -268,7 +271,8 @@
 
       <!-- NEW CLOSE BUTTON -->
       <div class="sheet-row mt-3 pt-3 border-t border-gray-200/50 justify-center">
-        <button id="closeSheetBtn" class="rounded-lg px-8 py-2 bg-gray-200 text-gray-700 font-semibold text-sm hover:bg-gray-300 transition-colors">
+        <!-- BUG FIX 3: Made close button MUCH more visible with red color -->
+        <button id="closeSheetBtn" class="rounded-lg px-8 py-2 bg-red-600 text-white font-semibold text-sm hover:bg-red-700 transition-all transform hover:scale-105 shadow-lg">
             Close
         </button>
       </div>
@@ -650,11 +654,7 @@
         const now = Date.now();
         const throttleMs = state.lowPower ? lowPowerThrottle : throttledUpdateInterval;
 
-        if (data && data.busId && typeof data.latitude === 'number' && typeof data.longitude === 'number') {
-          persistLastPosition(data.busId, { lat:data.latitude, lng:data.longitude, timestamp: data.timestamp || Date.now() });
-        }
-
-        if (!state.trackingBusId || data.busId !== state.trackingBusId) return;
+        if (!state.trackingBusId || !data || data.busId !== state.trackingBusId) return;
 
         if (now - lastSocketUpdateAt < throttleMs) {
           statusEl.textContent = `Bus ${data.busId} update skipped (low freq).`;
@@ -665,22 +665,35 @@
 
         if (typeof data.latitude !== 'number' || typeof data.longitude !== 'number') return;
         const lat = data.latitude, lng = data.longitude;
+        
+        const posToPersist = {
+            lat: lat,
+            lng: lng,
+            timestamp: data.timestamp || Date.now()
+        };
 
-        if (typeof data.speed === 'number' && data.speed >= 0) {
-          const speedKmh = data.speed * 3.6;
-          state.latestBusSpeed = speedKmh;
-          speedValue.textContent = Math.round(speedKmh);
+        // Correctly parse and display speed. No calculation needed.
+        const speed = parseFloat(data.speed);
+        if (!isNaN(speed)) { // Allow 0 and potential negative values
+          state.latestBusSpeed = speed; 
+          // FINAL FIX: Display exact speed with one decimal place
+          speedValue.textContent = speed.toFixed(1); 
+          posToPersist.speed = speed; // Add speed to be persisted
         } else {
           state.latestBusSpeed = null;
           speedValue.textContent = '--';
         }
+
+        // Persist the full data object including speed if available
+        persistLastPosition(data.busId, posToPersist);
 
         state.latestBusPosition = { lat, lng };
         ensureBusMarkerAndUI({ lat, lng }, data);
         state.busPathCoordinates.push([lat, lng]);
         busPathPolyline.setLatLngs(state.busPathCoordinates);
         statusEl.textContent = `Bus ${data.busId} at ${lat.toFixed(5)}, ${lng.toFixed(5)} (Time: ${data.timestamp || '—'})`;
-        pushTimeline({ title:`${data.busId} — ${lat.toFixed(4)}, ${lng.toFixed(4)}`, sub: data.timestamp || new Date().toLocaleTimeString() });
+        
+        pushTimeline(`${data.busId} — ${lat.toFixed(4)}, ${lng.toFixed(4)}`, data.timestamp || new Date().toLocaleTimeString());
         checkProximity(state.latestBusPosition);
         updateUIState();
       });
@@ -705,7 +718,8 @@
     function getPopupContent(data = {}) {
       const lat = (state.latestBusPosition?.lat || 0);
       const lng = (state.latestBusPosition?.lng || 0);
-      const speedText = state.latestBusSpeed !== null ? `<div>💨 Speed: ${Math.round(state.latestBusSpeed)} km/h</div>` : '';
+      // FINAL FIX: Display exact speed in popup as well
+      const speedText = state.latestBusSpeed !== null ? `<div>💨 Speed: ${state.latestBusSpeed.toFixed(1)} km/h</div>` : '';
       return `<div class="p-2 space-y-1">
         <div class="font-semibold text-indigo-700 text-lg">Bus: ${data.busId || state.trackingBusId || '—'}</div>
         <div>📍 Lat: ${lat.toFixed(5)}, Lng: ${lng.toFixed(5)}</div>
@@ -718,10 +732,9 @@
     // Tracking controls (preserve)
     // =========================
     function startTracking(){
-      state.latestBusSpeed = null;
+      // FINAL BUG FIX: Do NOT reset speed state here. Let the cache handle it.
       if (speedDisplay) {
         speedDisplay.style.display = 'flex';
-        speedValue.textContent = '--';
       }
 
       const busIdToTrack = busIdInput.value.trim();
@@ -730,6 +743,9 @@
       if (state.trackingBusId && state.trackingBusId !== busIdToTrack) {
         state.busPathCoordinates = [];
         if (busPathPolyline) busPathPolyline.setLatLngs(state.busPathCoordinates);
+        // When switching buses, reset the speed display
+        state.latestBusSpeed = null;
+        speedValue.textContent = '--';
       } else if (!state.trackingBusId) {
         state.busPathCoordinates = [];
         if (busPathPolyline) map.removeLayer(busPathPolyline);
@@ -743,10 +759,26 @@
       const cached = loadLastPosition(state.trackingBusId);
       if (cached) {
         state.latestBusPosition = { lat: cached.lat, lng: cached.lng };
+        
+        // Restore speed from cache if it exists
+        if (typeof cached.speed === 'number') { // Allow 0
+            state.latestBusSpeed = cached.speed;
+            // FINAL FIX: Display exact speed from cache
+            speedValue.textContent = cached.speed.toFixed(1);
+        } else {
+            // If no speed in cache, then reset
+            state.latestBusSpeed = null;
+            speedValue.textContent = '--';
+        }
+
         ensureBusMarkerAndUI(state.latestBusPosition, { busId: state.trackingBusId, timestamp: cached.timestamp || '(cached)' });
         state.busPathCoordinates.push([cached.lat, cached.lng]);
         busPathPolyline.setLatLngs(state.busPathCoordinates);
         checkProximity(state.latestBusPosition);
+      } else {
+        // If there's no cached data at all, reset the speed display
+        state.latestBusSpeed = null;
+        speedValue.textContent = '--';
       }
 
       updateUIState();
@@ -885,6 +917,15 @@
           const cached = loadLastPosition(tid);
           if (cached) {
             state.latestBusPosition = { lat: cached.lat, lng: cached.lng };
+            
+            // FIX: Restore speed from cache if it exists
+            if (typeof cached.speed === 'number') { // Allow 0
+                state.latestBusSpeed = cached.speed;
+                // FINAL FIX: Display exact speed from cache on load
+                speedValue.textContent = cached.speed.toFixed(1);
+                if (speedDisplay) speedDisplay.style.display = 'flex';
+            }
+
             ensureBusMarkerAndUI(state.latestBusPosition, { busId: tid, timestamp: cached.timestamp || '(cached)' });
             state.busPathCoordinates.push([cached.lat, cached.lng]);
             if (busPathPolyline) busPathPolyline.setLatLngs(state.busPathCoordinates);
@@ -922,3 +963,6 @@
   </script>
 </body>
 </html>
+
+
+
